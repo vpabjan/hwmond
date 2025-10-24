@@ -20,8 +20,9 @@
 #define STATE_PATH "/var/lib/hwmond/state.txt"
 
 static void usage(const char *p){
-    fprintf(stderr, "usage: %s list|list-rules|add-fixed <target> <value>|add-curve <target> <curve> <input>|remove <target>|reload\n", p);
+    fprintf(stderr,"usage: %s list|list-rules|add-fixed <target> <value>|add-curve <target> <curve> <input>|add-trigger <input> <operator> <value> <cmd>|remove <target>|apply ...|reload\n",p);
 }
+
 
 static int file_exists(const char *p){ return access(p, R_OK)==0; }
 
@@ -94,39 +95,55 @@ static int remove_target_from_config(const char *target) {
     return removed ? 0 : -1;
 }
 
-int main(int argc, char **argv) {
-    if (argc < 2) { usage(argv[0]); return 1; }
-    if (strcmp(argv[1], "list") == 0) {
-        cmd_list_state();
-        return 0;
+
+/* apply command: check if rule exists first */
+static int rule_exists(const char *target, const char *type){
+    FILE*f=fopen(CONFIG_PATH,"r"); if(!f) return 0;
+    char buf[512]; int found=0;
+    while(fgets(buf,sizeof(buf),f)){
+        char t[512], m[64]; if(sscanf(buf,"%511s %63s", t, m)==2){
+            if(strcmp(t,target)==0 && strcmp(m,type)==0){found=1; break;}
+        }
     }
-    if (strcmp(argv[1], "list-rules") == 0) {
-        cmd_list_config();
-        return 0;
+    fclose(f); return found;
+}
+
+int main(int argc,char**argv){
+    if(argc<2){ usage(argv[0]); return 1; }
+    if(strcmp(argv[1],"list")==0){ cmd_list_state(); return 0;}
+    if(strcmp(argv[1],"list-rules")==0){ cmd_list_config(); return 0;}
+    if(strcmp(argv[1],"reload")==0){ reload_daemon(); return 0;}
+    
+    if(strcmp(argv[1],"add-fixed")==0 && argc>=4){
+        char target[512]; snprintf(target,sizeof(target),"%s",argv[2]);
+        if(rule_exists(target,"fixed")){ printf("rule exists\n"); return 0; }
+        char line[1024]; snprintf(line,sizeof(line),"%s fixed %d",argv[2],atoi(argv[3]));
+        add_line_to_config(line); reload_daemon(); return 0;
     }
-    if (strcmp(argv[1], "add-fixed") == 0) {
-        if (argc < 4) { usage(argv[0]); return 1; }
-        char line[1024]; snprintf(line, sizeof(line), "%s fixed %d", argv[2], atoi(argv[3]));
-        if (add_line_to_config(line) == 0) printf("added\n");
-        reload_daemon();
-        return 0;
+    if(strcmp(argv[1],"add-curve")==0 && argc>=5){
+        char target[512]; snprintf(target,sizeof(target),"%s",argv[2]);
+        if(rule_exists(target,"curve")){ printf("rule exists\n"); return 0; }
+        char line[1024]; snprintf(line,sizeof(line),"%s curve %s %s",argv[2],argv[3],argv[4]);
+        add_line_to_config(line); reload_daemon(); return 0;
     }
-    if (strcmp(argv[1], "add-curve") == 0) {
-        if (argc < 5) { usage(argv[0]); return 1; }
-        char line[1024]; snprintf(line, sizeof(line), "%s curve %s %s", argv[2], argv[3], argv[4]);
-        if (add_line_to_config(line) == 0) printf("added\n");
-        reload_daemon();
-        return 0;
+    if(strcmp(argv[1],"add-trigger")==0 && argc>=6){
+        char target[512]; snprintf(target,sizeof(target),"%s",argv[2]);
+        char op=argv[3][0]; int val=atoi(argv[4]);
+        char cmd[512]; snprintf(cmd,sizeof(cmd),"%s",argv[5]);
+        if(argc>6){ for(int i=6;i<argc;i++){ strcat(cmd," "); strcat(cmd,argv[i]); } }
+        char line[1024]; snprintf(line,sizeof(line),"%s trigger %c %d %s",argv[2],op,val,cmd);
+        add_line_to_config(line); reload_daemon(); return 0;
     }
-    if (strcmp(argv[1], "remove") == 0) {
-        if (argc < 3) { usage(argv[0]); return 1; }
-        if (remove_target_from_config(argv[2]) == 0) printf("removed\n");
-        else printf("not found\n");
-        reload_daemon();
-        return 0;
-    }
-    if (strcmp(argv[1], "reload") == 0) {
-        return reload_daemon();
+    if(strcmp(argv[1],"remove")==0 && argc>=3){
+        FILE *f=fopen(CONFIG_PATH,"r"); if(!f) return 1;
+        FILE *tmp=tmpfile(); char *line=NULL; size_t cap=0; ssize_t len;
+        while((len=getline(&line,&cap,f))>0){
+            char t[512], m[64]; if(sscanf(line,"%511s %63s", t, m)==2 && strcmp(t,argv[2])==0) continue;
+            fputs(line,tmp);
+        }
+        free(line); fclose(f);
+        rewind(tmp); FILE *out=fopen(CONFIG_PATH,"w"); char buf[512]; while(fgets(buf,sizeof(buf),tmp)) fputs(buf,out); fclose(out); fclose(tmp);
+        reload_daemon(); return 0;
     }
     usage(argv[0]);
     return 1;

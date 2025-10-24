@@ -29,6 +29,12 @@ struct Rule {
     char curve[64];     // curve name
     char input[512];    // input sensor file (for curve)
     int last_applied;   // cached last value
+
+	/* trigger fields */
+	char operator;      // '>', '<', '='
+	int trig_value;     // threshold to compare
+	char trig_cmd[512]; // command to exec
+    
 };
 
 static struct Rule rules[MAXRULES];
@@ -114,93 +120,83 @@ static int apply_curve_by_name(const char *name, float T){
           <target> curve <curve_name> <input_path>
    comment lines start with '#'
 */
-static void load_config(const char *path) {
-    FILE *f = fopen(path, "r");
-    if (!f) {
-        fprintf(stderr, "Could not open config %s: %s\n", path, strerror(errno));
-        nrules = 0;
-        return;
-    }
-    char *line = NULL; size_t cap = 0; ssize_t len;
-    int idx = 0;
-    while ((len = getline(&line, &cap, f)) > 0 && idx < MAXRULES) {
-        if (len <= 0) continue;
-        if (line[len-1] == '\n') line[len-1] = 0;
-        char *s = line;
-        while (*s == ' ' || *s == '\t') s++;
-        if (*s == '#' || *s == 0) continue;
-        char target[512]; char mode[64];
-        if (sscanf(s, "%511s %63s", target, mode) < 2) continue;
-        struct Rule r; memset(&r,0,sizeof(r)); r.last_applied = -1;
-        strncpy(r.target, target, sizeof(r.target)-1);
-        if (strcmp(mode, "fixed") == 0) {
-            int v;
-            if (sscanf(s, "%*s %*s %d", &v) == 1) {
-                r.mode = 0; r.fixed = v;
+static void load_config(const char *path){
+    FILE *f=fopen(path,"r"); if(!f){ nrules=0; return; }
+    char *line=NULL; size_t cap=0; ssize_t len; int idx=0;
+    while((len=getline(&line,&cap,f))>0 && idx<MAXRULES){
+        if(line[len-1]=='\n') line[len-1]=0;
+        char *s=line; while(*s==' '||*s=='\t') s++; if(*s=='#'||*s==0) continue;
+
+        char target[512], mode[64];
+        if(sscanf(s,"%511s %63s", target, mode)<2) continue;
+
+        struct Rule r; memset(&r,0,sizeof(r)); r.last_applied=-1;
+        strncpy(r.target,target,sizeof(r.target)-1);
+
+        if(strcmp(mode,"fixed")==0){
+            int v; if(sscanf(s,"%*s %*s %d",&v)==1){ r.mode=0; r.fixed=v; }
+            else continue;
+        }
+        else if(strcmp(mode,"curve")==0){
+            char curve[64], input[512]; 
+            if(sscanf(s,"%*s %*s %63s %511s", curve, input)==2){
+                r.mode=1; strncpy(r.curve,curve,sizeof(r.curve)-1);
+                strncpy(r.input,input,sizeof(r.input)-1);
             } else continue;
-        } else if (strcmp(mode, "curve") == 0) {
-            char curve[64]; char input[512];
-            if (sscanf(s, "%*s %*s %63s %511s", curve, input) == 2) {
-                r.mode = 1;
-                strncpy(r.curve, curve, sizeof(r.curve)-1);
-                strncpy(r.input, input, sizeof(r.input)-1);
+        }
+        else if(strcmp(mode,"trigger")==0){
+            char op; int val; char cmd[512];
+            if(sscanf(s,"%*s %*s %c %d %511[^\n]", &op, &val, cmd)==3){
+                r.mode=2; r.operator=op; r.trig_value=val;
+                strncpy(r.trig_cmd, cmd, sizeof(r.trig_cmd)-1);
             } else continue;
         } else continue;
-        rules[idx++] = r;
+        rules[idx++]=r;
     }
-    free(line);
-    fclose(f);
-    nrules = idx;
-    fprintf(stderr, "Loaded %d rules\n", nrules);
+    free(line); fclose(f); nrules=idx;
 }
 
 /* write a small human state file so hwctl can read it easily */
-static void write_state() {
-    FILE *f = fopen(STATE_PATH, "w");
-    if (!f) return;
-    time_t t = time(NULL);
-    fprintf(f, "# hwmond state updated %s", ctime(&t));
-    for (int i = 0; i < nrules; ++i) {
-        fprintf(f, "%s mode=%s ",
-                rules[i].target, (rules[i].mode==0)?"fixed":"curve");
-        if (rules[i].mode==0) fprintf(f, "value=%d\n", rules[i].last_applied);
-        else fprintf(f, "curve=%s input=%s value=%d\n", rules[i].curve, rules[i].input, rules[i].last_applied);
+static void write_state(){
+    FILE *f=fopen(STATE_PATH,"w"); if(!f) return;
+    time_t t=time(NULL); fprintf(f,"# hwmond state updated %s", ctime(&t));
+    for(int i=0;i<nrules;i++){
+        fprintf(f,"%s mode=%s ", rules[i].target, (rules[i].mode==0)?"fixed":(rules[i].mode==1)?"curve":"trigger");
+        if(rules[i].mode==0) fprintf(f,"value=%d\n",rules[i].last_applied);
+        else if(rules[i].mode==1) fprintf(f,"curve=%s input=%s value=%d\n", rules[i].curve,rules[i].input,rules[i].last_applied);
+        else fprintf(f,"operator=%c value=%d cmd=%s\n", rules[i].operator,rules[i].trig_value,rules[i].trig_cmd);
     }
     fclose(f);
 }
 
-int main(int argc, char **argv) {
-    (void)argc; (void)argv;
-    signal(SIGHUP, handle_sighup);
+int main(){
+    signal(SIGHUP,handle_sighup);
     load_config(CONFIG_PATH);
 
-    /* run in foreground; systemd can manage it */
-    while (1) {
-        if (reload_req) {
-            fprintf(stderr, "SIGHUP: reloading config\n");
-            load_config(CONFIG_PATH);
-            reload_req = 0;
-        }
-        for (int i = 0; i < nrules; ++i) {
-            int out = -1;
-            if (rules[i].mode == 0) {
-                out = rules[i].fixed;
-            } else {
-                float tin = read_input_float(rules[i].input);
-                if (tin < 0) continue;
-                out = apply_curve_by_name(rules[i].curve, tin);
-            }
-            if (out < 0) continue;
-            /* simple deadband: skip tiny adjustments */
-            if (rules[i].last_applied >= 0 && abs(rules[i].last_applied - out) < 3) {
-                /* skip */
-            } else {
-                if (write_int_to_file(rules[i].target, out) == 0) {
-                    rules[i].last_applied = out;
-                    fprintf(stderr, "applied %s <- %d\n", rules[i].target, out);
-                } else {
-                    fprintf(stderr, "failed to write %s: %s\n", rules[i].target, strerror(errno));
+    while(1){
+        if(reload_req){ load_config(CONFIG_PATH); reload_req=0; }
+        for(int i=0;i<nrules;i++){
+            if(rules[i].mode==0){
+                int out=rules[i].fixed;
+                if(rules[i].last_applied<0 || abs(rules[i].last_applied-out)>=3){
+                    if(write_int_to_file(rules[i].target,out)==0) rules[i].last_applied=out;
                 }
+            }
+            else if(rules[i].mode==1){
+                float val=read_input_float(rules[i].input);
+                if(val<0) continue;
+                int out=apply_curve_by_name(rules[i].curve,val);
+                if(rules[i].last_applied<0 || abs(rules[i].last_applied-out)>=3){
+                    if(write_int_to_file(rules[i].target,out)==0) rules[i].last_applied=out;
+                }
+            }
+            else if(rules[i].mode==2){
+                float val=read_input_float(rules[i].target);
+                int trig=0;
+                if(rules[i].operator=='>') trig=(val>rules[i].trig_value);
+                else if(rules[i].operator=='<') trig=(val<rules[i].trig_value);
+                else if(rules[i].operator=='=') trig=((int)val==rules[i].trig_value);
+                if(trig) system(rules[i].trig_cmd);
             }
         }
         write_state();
