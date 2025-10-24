@@ -10,15 +10,24 @@ Supports 5 built-in curves:
 ## usage
 >sudo hwctl list
 
+shows active rules.
+
 >sudo hwctl list-rules
+
+shows the config file.
 
 >sudo hwctl add-fixed /sys/class/hwmon/hwmon2/pwm1 150
 
+tells the daemon to update *hwmon2/pwm1* to 150.
+
 >sudo hwctl add-curve /sys/class/hwmon/hwmon2/pwm1 loud /sys/class/hwmon/hwmon1/temp1_input
 
-max out fans on hwmon2/pwm1, when hwmon1/temp1_input is larger than 75 degrees
+tells the daemon to manage *hwmon2/pwm1* using the curve loud, with data from *hwmon1/temp1_input*.
+
 
 >sudo hwctl add-trigger /sys/class/hwmon/hwmon1/temp1_input > 75 "hwctl apply /sys/class/hwmon/hwmon2/pwm1 255"
+
+max out fans on *hwmon2/pwm1*, when *hwmon1/temp1_input* is larger than 75 degrees.
 
 >sudo hwctl reload
 
