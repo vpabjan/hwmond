@@ -13,6 +13,7 @@ A minimalistic /sys/class/**hwmon** managing **daemon**, useful for fan speed co
 *add- commands automatically signal the daemon, so changes apply immediately.*
 
 >sudo hwctl add-trigger /sys/class/hwmon/hwmon1/temp1_input > 75 "hwctl apply /sys/class/hwmon/hwmon2/pwm1 255"
+
 *max out fans on hwmon2/pwm1, when hwmon1/temp1_input is larger than 75 degrees*
 
 >sudo hwctl reload
