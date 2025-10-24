@@ -24,6 +24,7 @@ A minimalistic /sys/class/**hwmon** managing **daemon**, useful for fan speed co
 ## installation
 ### compile
 >sudo chmod +x build.sh
+
 >./build.sh
 
 
