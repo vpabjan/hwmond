@@ -9,11 +9,14 @@
    Build: gcc -O2 -o hwctl hwctl.c
 */
 #define _GNU_SOURCE
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <sys/types.h>
 #include <signal.h>
 
 #define CONFIG_PATH "/etc/hwmond.conf"
@@ -33,6 +36,25 @@ static void cmd_list_state(){
     char buf[512];
     while (fgets(buf, sizeof(buf), f)) fputs(buf, stdout);
     fclose(f);
+}
+
+static void print_dir(const char* dir) {
+	DIR* hwdir;
+	struct dirent* ent;
+	hwdir = opendir(dir);
+	if (!hwdir) {
+		printf("Cannot read folder '%s' !", dir);
+		return;
+	}
+	while ((ent = readdir(hwdir))) {
+		puts(ent->d_name);
+	}
+	(void) closedir (hwdir);
+	return;
+}
+
+static void cmd_hwmon_list(){
+	print_dir("/sys/class/hwmon");
 }
 
 static void cmd_list_config(){
@@ -108,11 +130,14 @@ static int rule_exists(const char *target, const char *type){
     fclose(f); return found;
 }
 
+
+
 int main(int argc,char**argv){
     if(argc<2){ usage(argv[0]); return 1; }
     if(strcmp(argv[1],"list")==0){ cmd_list_state(); return 0;}
     if(strcmp(argv[1],"list-rules")==0){ cmd_list_config(); return 0;}
     if(strcmp(argv[1],"reload")==0){ reload_daemon(); return 0;}
+	if(strcmp(argv[1],"list-hwmon")==0){cmd_hwmon_list(); return 0;}
     
     if(strcmp(argv[1],"add-fixed")==0 && argc>=4){
         char target[512]; snprintf(target,sizeof(target),"%s",argv[2]);
@@ -145,6 +170,7 @@ int main(int argc,char**argv){
         rewind(tmp); FILE *out=fopen(CONFIG_PATH,"w"); char buf[512]; while(fgets(buf,sizeof(buf),tmp)) fputs(buf,out); fclose(out); fclose(tmp);
         reload_daemon(); return 0;
     }
+    
     usage(argv[0]);
     return 1;
 }
