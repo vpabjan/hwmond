@@ -45,6 +45,8 @@ Supports 5 built-in curves:
 >sudo chmod +x update.sh \
 >./update.sh
 
+- *(keep in mind that update.sh calls daemon-reload and also stops and resets hwmond!)*
+
 ## manual installation
 ### compile
 >sudo chmod +x build.sh\
