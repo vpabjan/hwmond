@@ -41,7 +41,7 @@ static struct Rule rules[MAXRULES];
 static int nrules = 0;
 
 /* read a sensor file that usually contains either millidegrees or degrees */
-static float read_input_float(const char *path) {
+static inline float read_input_float(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return -1.0f;
     long v = 0;
@@ -51,7 +51,7 @@ static float read_input_float(const char *path) {
     return (float)v;
 }
 
-static int write_int_to_file(const char *path, int v) {
+static inline int write_int_to_file(const char *path, int v) {
     FILE *f = fopen(path, "w");
     if (!f) return -1;
     int r = fprintf(f, "%d\n", v);
@@ -60,7 +60,7 @@ static int write_int_to_file(const char *path, int v) {
 }
 
 /* curves: return 0..255 */
-static int curve_silent(float T){
+static inline int curve_silent(float T){
     const float Tmin=30.0f, Tmax=80.0f;
     if (T <= Tmin) return 0;
     if (T >= Tmax) return 255;
@@ -68,7 +68,7 @@ static int curve_silent(float T){
     float y = x*x*x;
     return (int)(y * 255.0f + 0.5f);
 }
-static int curve_loud(float T){
+static inline int curve_loud(float T){
     const float Tmin=30.0f, Tmax=100.0f;
     if (T <= Tmin) return 0;
     if (T >= Tmax) return 255;
@@ -76,7 +76,7 @@ static int curve_loud(float T){
     float y = x*x;
     return (int)(y * 255.0f + 0.5f);
 }
-static int curve_aggressive(float T){
+static inline int curve_aggressive(float T){
     const float Tmin=30.0f, Tmax=70.0f;
     if (T <= Tmin) return 0;
     if (T >= Tmax) return 255;
@@ -84,7 +84,7 @@ static int curve_aggressive(float T){
     float y = sqrtf(x);
     return (int)(y * 255.0f + 0.5f);
 }
-static int curve_logarithmic(float T){
+static inline int curve_logarithmic(float T){
     const float Tmin=30.0f, Tmax=90.0f;
     if (T <= Tmin) return 0;
     if (T >= Tmax) return 255;
@@ -92,7 +92,7 @@ static int curve_logarithmic(float T){
     float y = logf(1.0f + 9.0f * x) / logf(10.0f);
     return (int)(y * 255.0f + 0.5f);
 }
-static int curve_step(float T){
+static inline int curve_step(float T){
     if (T < 40.0f) return 0;
     if (T < 50.0f) return 100;
     if (T < 60.0f) return 150;
@@ -157,7 +157,7 @@ static void load_config(const char *path){
 }
 
 /* write a small human state file so hwctl can read it easily */
-static void write_state(){
+static inline void write_state(){
     FILE *f=fopen(STATE_PATH,"w"); if(!f) return;
     time_t t=time(NULL); fprintf(f,"# hwmond state updated %s", ctime(&t));
     for(int i=0;i<nrules;i++){
