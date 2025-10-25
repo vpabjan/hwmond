@@ -5,7 +5,7 @@ Supports setting fixed values, curves & triggers.\
 Supports 5 built-in curves:
 > silent, loud, aggressive, log, step
 
-
+![image plotting curve temperature to output](https://github.com/vpabjan/hwmond/blob/main/curves.png?raw=true)
 
 ## usage
 >sudo hwctl list
