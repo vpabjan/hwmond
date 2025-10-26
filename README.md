@@ -36,7 +36,7 @@ Supports 5 built-in curves:
 ## requirements
 **systemd**, some hwmon interfaces probably...?
 
-## installing an updating
+## installing and updating
 >sudo chmod +x install.sh \
 >./install.sh
 
