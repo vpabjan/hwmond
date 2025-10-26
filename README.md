@@ -80,3 +80,16 @@ Supports 5 built-in curves:
 
 ## note
 - Originally made for my dell latitude 5400. Compiles and works, for me! (I use arch btw.)
+
+# APPENDIX A
+## laptops
+
+Some laptops might require disabling BIOS control. If you intend to use hwmond for fan speed control.\
+For example on my dell lattitude 5400 that requires running:
+>sudo dell-bios-fan-control 0
+
+
+
+## note
+
+Keep in my that hwmond currently **does not** automatically detect after reboot if the **hwmon interface numbers haven't been shuffled around**. This happens, and for that a feature will be implemented that detects the shuffling by hwmon interfaces being instead found by name.
