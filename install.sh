@@ -4,7 +4,7 @@ sudo chmod +x build.sh
 ./build.sh
 
 echo "copy daemon to sbin..."
-sudo cp hwmond /usr/local/sbin/
+sudo cp hwmond /usr/local/sbin/hwmond
 
 echo "give daemon perms..."
 sudo chmod 755 /usr/local/sbin/hwmond
